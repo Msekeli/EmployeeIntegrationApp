@@ -78,20 +78,6 @@
         "responses": { "200": { "description": "Function host is healthy.", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "example": "healthy" } } } } } } }
       }
     },
-    "/HelloFunction": {
-      "get": {
-        "operationId": "HelloFunctionGet",
-        "summary": "Return the sample Functions welcome message",
-        "security": [{ "functionKey": [] }],
-        "responses": { "200": { "description": "Welcome text.", "content": { "text/plain": { "schema": { "type": "string", "example": "Welcome to Azure Functions!" } } } }, "401": { "description": "A Function key is required." } }
-      },
-      "post": {
-        "operationId": "HelloFunctionPost",
-        "summary": "Return the sample Functions welcome message",
-        "security": [{ "functionKey": [] }],
-        "responses": { "200": { "description": "Welcome text.", "content": { "text/plain": { "schema": { "type": "string", "example": "Welcome to Azure Functions!" } } } }, "401": { "description": "A Function key is required." } }
-      }
-    },
     "/openapi.json": {
       "get": { "operationId": "OpenApiDocument", "summary": "Download this OpenAPI document", "responses": { "200": { "description": "OpenAPI 3.0.3 document.", "content": { "application/json": { "schema": { "type": "object" } } } } } }
     },
@@ -108,7 +94,6 @@
     }
   },
   "components": {
-    "securitySchemes": { "functionKey": { "type": "apiKey", "in": "header", "name": "x-functions-key", "description": "Required for the existing HelloFunction endpoint." } },
     "schemas": {
       "EmployeeUpdatedEvent": {
         "type": "object",

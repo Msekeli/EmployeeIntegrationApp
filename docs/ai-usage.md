@@ -60,6 +60,18 @@ If verification has not been performed, state that explicitly. If a check fails,
 
 Add entries as meaningful implementation milestones are completed.
 
+### Milestone: Swagger UI gzip asset delivery fix
+
+- **Task:** Investigated Swagger UI asset responses after browsers rejected the JavaScript bundle and preset.
+- **Engineering decision:** Verified that the embedded JS and CSS resources in `Swashbuckle.AspNetCore.SwaggerUI.dll` begin with the gzip signature (`1f 8b 08`). Kept the resources compressed and added `Content-Encoding: gzip` to JS/CSS responses rather than adding dependencies or decompressing them.
+- **Verification:** `dotnet build EmployeeIntegration.slnx` passed with 0 warnings/errors; `dotnet test EmployeeIntegration.slnx` passed 116/116 tests; `git diff --check` passed. Live requests returned HTTP 200 for `/api/swagger`, `/api/swagger/swagger-ui-bundle.js`, `/api/swagger/swagger-ui-standalone-preset.js`, and `/api/swagger/swagger-ui.css`; the JS/CSS responses included `Content-Encoding: gzip`. The browser rendered the Swagger UI and exposed the documented operations, confirming the bundle loaded.
+
+### Milestone: Remove sample HelloFunction endpoints
+
+- **Task:** Removed the unused sample `HelloFunction` and its GET/POST operations from the hand-maintained OpenAPI document.
+- **Engineering decision:** Removed the function-key security scheme because it was referenced only by those sample operations. No business logic, Swagger asset delivery, or unrelated documentation was changed.
+- **Verification:** `dotnet build EmployeeIntegration.slnx` passed with 0 warnings/errors; `dotnet test EmployeeIntegration.slnx` passed 116/116 tests; `git diff --check` passed. A repository-wide search found no remaining `HelloFunction`, `/HelloFunction`, or `functionKey` references, and the README contained no sample-endpoint instructions.
+
 ### Milestone: Checkpoint 3 — Idempotency and Persistence
 
 - **Milestone:** Stable event deduplication and processing state management (Checkpoint 3).

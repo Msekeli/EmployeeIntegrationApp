@@ -87,6 +87,11 @@ public sealed class SwaggerFunction
                 : asset.EndsWith(".js", StringComparison.Ordinal)
                     ? "application/javascript; charset=utf-8"
                     : "image/png");
+            if (asset.EndsWith(".js", StringComparison.Ordinal)
+                || asset.EndsWith(".css", StringComparison.Ordinal))
+            {
+                response.Headers.Add("Content-Encoding", "gzip");
+            }
             await stream.CopyToAsync(response.Body);
             return response;
         }
