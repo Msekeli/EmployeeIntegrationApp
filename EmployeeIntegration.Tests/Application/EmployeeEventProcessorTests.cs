@@ -1,12 +1,19 @@
 
 using EmployeeIntegration.Application;
 using EmployeeIntegration.Domain;
+using EmployeeIntegration.Infrastructure;
 
 namespace EmployeeIntegration.Tests.Application;
 
 public class EmployeeEventProcessorTests
 {
-    private readonly EmployeeEventProcessor _processor = new();
+    private readonly IEventProcessingStore _store = new InMemoryEventProcessingStore();
+    private readonly EmployeeEventProcessor _processor;
+
+    public EmployeeEventProcessorTests()
+    {
+        _processor = new EmployeeEventProcessor(_store);
+    }
 
     [Fact]
     public void ProcessJson_ValidJson_ReturnsSuccessWithTransformedRequest()
@@ -202,5 +209,187 @@ public class EmployeeEventProcessorTests
         Assert.False(result.IsSuccess);
         Assert.Equal(EventProcessingStatus.Invalid, result.Status);
         Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public void Process_FirstDelivery_SucceedsAndRecordsCompletedState()
+    {
+        var eventId = "evt-dedup-001";
+        var @event = CreateValidSampleEvent(eventId, "EMP-100");
+
+        var result = _processor.Process(@event);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.IsDuplicate);
+        Assert.Equal(EventProcessingStatus.Success, result.Status);
+        Assert.Equal(eventId, result.EventId);
+        Assert.NotNull(result.TransformedRequest);
+
+        var stored = _store.Get(eventId);
+        Assert.NotNull(stored);
+        Assert.Equal(ProcessingState.Completed, stored.State);
+        Assert.Equal(1, stored.AttemptCount);
+    }
+
+    [Fact]
+    public void Process_RepeatedDelivery_ReturnsExplicitDuplicateResultWithoutReexecuting()
+    {
+        var eventId = "evt-dedup-002";
+        var @event = CreateValidSampleEvent(eventId, "EMP-101");
+
+        var firstResult = _processor.Process(@event);
+        Assert.True(firstResult.IsSuccess);
+        Assert.Equal(EventProcessingStatus.Success, firstResult.Status);
+
+        // Second delivery of the identical event
+        var secondResult = _processor.Process(@event);
+
+        Assert.False(secondResult.IsSuccess);
+        Assert.True(secondResult.IsDuplicate);
+        Assert.Equal(EventProcessingStatus.Duplicate, secondResult.Status);
+        Assert.Equal(eventId, secondResult.EventId);
+        Assert.Null(secondResult.TransformedRequest);
+        Assert.Contains(eventId, secondResult.Message);
+
+        var stored = _store.Get(eventId);
+        Assert.NotNull(stored);
+        Assert.Equal(ProcessingState.Completed, stored.State);
+    }
+
+    [Fact]
+    public void Process_IndependentEventIds_ProcessIndependently()
+    {
+        var event1 = CreateValidSampleEvent("evt-indep-1", "EMP-201");
+        var event2 = CreateValidSampleEvent("evt-indep-2", "EMP-202");
+
+        var result1 = _processor.Process(event1);
+        var result2 = _processor.Process(event2);
+
+        Assert.True(result1.IsSuccess);
+        Assert.True(result2.IsSuccess);
+        Assert.Equal(ProcessingState.Completed, _store.Get("evt-indep-1")?.State);
+        Assert.Equal(ProcessingState.Completed, _store.Get("evt-indep-2")?.State);
+    }
+
+    [Fact]
+    public async Task Process_ConcurrentDeliveries_CannotBothClaimFirstProcessing()
+    {
+        var eventId = "evt-concurrent-001";
+        var json = $$"""
+        {
+            "eventId": "{{eventId}}",
+            "eventType": "EmployeeUpdated",
+            "timestamp": "2026-10-12T14:30:00Z",
+            "employeeId": "EMP-999",
+            "firstName": "Ada",
+            "lastName": "Lovelace",
+            "email": "ada@computing.org",
+            "department": "Engineering",
+            "location": "Cape Town"
+        }
+        """;
+
+        const int concurrencyLevel = 20;
+        var startSignal = new TaskCompletionSource();
+
+        var tasks = Enumerable.Range(0, concurrencyLevel).Select(async _ =>
+        {
+            await startSignal.Task;
+            return _processor.ProcessJson(json);
+        }).ToArray();
+
+        // Release all threads simultaneously
+        startSignal.SetResult();
+        var results = await Task.WhenAll(tasks);
+
+        var successCount = results.Count(r => r.Status == EventProcessingStatus.Success);
+        var duplicateOrConflictCount = results.Count(r =>
+            r.Status == EventProcessingStatus.Duplicate || r.Status == EventProcessingStatus.Conflict);
+
+        // Exactly ONE concurrent execution must claim first processing
+        Assert.Equal(1, successCount);
+        Assert.Equal(concurrencyLevel - 1, duplicateOrConflictCount);
+
+        var stored = _store.Get(eventId);
+        Assert.NotNull(stored);
+        Assert.Equal(ProcessingState.Completed, stored.State);
+    }
+
+    [Fact]
+    public void Process_EarlierAttemptUncertain_ReturnsUncertainAndNeverClaimsSuccess()
+    {
+        var eventId = "evt-uncertain-001";
+        _store.RecordState(eventId, ProcessingState.Uncertain, "Downstream call timed out with unknown outcome.");
+
+        var @event = CreateValidSampleEvent(eventId, "EMP-301");
+        var result = _processor.Process(@event);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsDuplicate);
+        Assert.Equal(EventProcessingStatus.Uncertain, result.Status);
+        Assert.Equal(eventId, result.EventId);
+        Assert.Contains("uncertain outcome", result.Message, StringComparison.OrdinalIgnoreCase);
+
+        var stored = _store.Get(eventId);
+        Assert.NotNull(stored);
+        Assert.Equal(ProcessingState.Uncertain, stored.State);
+    }
+
+    [Fact]
+    public void Process_EarlierAttemptFailed_ReturnsFailedResult()
+    {
+        var eventId = "evt-failed-001";
+        _store.RecordState(eventId, ProcessingState.Failed, "Downstream rejected update permanently (400 Bad Request).");
+
+        var @event = CreateValidSampleEvent(eventId, "EMP-302");
+        var result = _processor.Process(@event);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsDuplicate);
+        Assert.Equal(EventProcessingStatus.Failed, result.Status);
+        Assert.Equal(eventId, result.EventId);
+        Assert.Contains("previously failed", result.Message, StringComparison.OrdinalIgnoreCase);
+
+        var stored = _store.Get(eventId);
+        Assert.NotNull(stored);
+        Assert.Equal(ProcessingState.Failed, stored.State);
+    }
+
+    [Fact]
+    public void Process_RecoveryReset_DoesNotReplayUncertainOutcome()
+    {
+        var eventId = "evt-reset-001";
+        _store.RecordState(eventId, ProcessingState.Uncertain, "Downstream timeout.");
+
+        var @event = CreateValidSampleEvent(eventId, "EMP-303");
+
+        // Before reset, processing returns Uncertain
+        var blockedResult = _processor.Process(@event);
+        Assert.Equal(EventProcessingStatus.Uncertain, blockedResult.Status);
+
+        // An uncertain outcome may already have applied the side effect, so it
+        // remains blocked until a durable reconciliation mechanism exists.
+        var resetSuccess = _store.TryReset(eventId);
+        Assert.False(resetSuccess);
+
+        var replayedResult = _processor.Process(@event);
+        Assert.Equal(EventProcessingStatus.Uncertain, replayedResult.Status);
+        Assert.Equal(ProcessingState.Uncertain, _store.Get(eventId)?.State);
+    }
+
+    private static EmployeeUpdatedEvent CreateValidSampleEvent(string eventId, string employeeId)
+    {
+        return new EmployeeUpdatedEvent
+        {
+            EventId = eventId,
+            EventType = "EmployeeUpdated",
+            Timestamp = DateTimeOffset.UtcNow,
+            EmployeeId = employeeId,
+            FirstName = "Test",
+            LastName = "User",
+            Email = $"{employeeId.ToLowerInvariant()}@example.com",
+            Department = "Engineering",
+            OfficeCode = "CPT"
+        };
     }
 }

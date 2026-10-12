@@ -1,4 +1,5 @@
 using EmployeeIntegration.Application;
+using EmployeeIntegration.Infrastructure;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,7 @@ builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
     .ConfigureFunctionsApplicationInsights();
 
+builder.Services.AddSingleton<IEventProcessingStore, InMemoryEventProcessingStore>();
 builder.Services.AddSingleton<IEmployeeEventProcessor, EmployeeEventProcessor>();
 
 builder.Build().Run();

@@ -34,6 +34,10 @@ public sealed class EmployeeUpdatedFunction
         var statusCode = result.Status switch
         {
             EventProcessingStatus.Success => HttpStatusCode.OK,
+            EventProcessingStatus.Duplicate => HttpStatusCode.OK,
+            EventProcessingStatus.Conflict => HttpStatusCode.Conflict,
+            EventProcessingStatus.Uncertain => HttpStatusCode.InternalServerError,
+            EventProcessingStatus.Failed => HttpStatusCode.InternalServerError,
             _ => HttpStatusCode.BadRequest
         };
 

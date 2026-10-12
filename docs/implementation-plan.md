@@ -65,15 +65,15 @@ The supported event contract must be based on the documented requirements and ac
 
 ## Checkpoint 3 — Idempotency and Persistence
 
-**Status: Not started.**
+**Status: Complete — implemented, built, tested, and reviewed.**
 
 Goal: Prevent duplicate event delivery from producing unintended duplicate downstream effects and retain sufficient processing state.
 
-- [ ] Identify events using a stable event identifier.
-- [ ] Record processing status and information needed to recognise previously processed events.
-- [ ] Prevent duplicate side effects when an already-successful event is delivered again.
-- [ ] Define how processing behaves when an earlier attempt failed or its outcome is uncertain.
-- [ ] Add tests for repeated delivery and relevant state transitions.
+- [x] Identify events using a stable event identifier.
+- [x] Record processing status and information needed to recognise previously processed events.
+- [x] Prevent duplicate side effects when an already-successful event is delivered again.
+- [x] Define how processing behaves when an earlier attempt failed or its outcome is uncertain.
+- [x] Add tests for repeated delivery and relevant state transitions.
 
 Use the simplest persistence mechanism that satisfies the requirement and fits the existing architecture. Do not introduce a database server, distributed cache, or message broker without a demonstrated need.
 
