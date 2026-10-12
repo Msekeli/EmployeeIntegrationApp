@@ -1,0 +1,184 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Employee Integration API",
+    "version": "1.0.0",
+    "description": "Local employee-event intake, processing status, recovery, and health endpoints. Processing state is in-memory and is cleared when the Function host restarts."
+  },
+  "servers": [{ "url": "/api" }],
+  "paths": {
+    "/events/employee-updated": {
+      "post": {
+        "operationId": "EmployeeUpdated",
+        "summary": "Receive and process an employee update event",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmployeeUpdatedEvent" },
+              "example": {
+                "eventId": "evt-1001",
+                "eventType": "EmployeeUpdated",
+                "timestamp": "2026-10-12T07:00:00Z",
+                "sequenceNumber": 100,
+                "data": {
+                  "employeeId": "EMP-1001",
+                  "firstName": "Ada",
+                  "lastName": "Lovelace",
+                  "email": "ada@example.test",
+                  "department": "Engineering",
+                  "jobTitle": "Engineer",
+                  "officeCode": "CPT"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Processed, already processed, or suppressed as stale.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventProcessingResult" } } } },
+          "400": { "description": "Malformed JSON or event validation failed.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventProcessingResult" }, "example": { "status": 3, "isSuccess": false, "isDuplicate": false, "isStale": false, "eventId": "evt-1001", "transformedRequest": null, "errors": [{ "field": "FirstName", "message": "FirstName is required." }], "message": "Event validation failed." } } } },
+          "409": { "description": "Another execution is processing the event, or the event cannot be claimed." },
+          "500": { "description": "Downstream processing failed or has an uncertain outcome.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventProcessingResult" } } } }
+        }
+      }
+    },
+    "/events/{eventId}": {
+      "get": {
+        "operationId": "GetEventStatus",
+        "summary": "Inspect an event processing record",
+        "parameters": [{ "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Current processing record.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventProcessingRecord" } } } },
+          "404": { "description": "No record exists for this event ID." }
+        }
+      }
+    },
+    "/events/dead-letter": {
+      "get": {
+        "operationId": "GetDeadLetterEvents",
+        "summary": "List failed event records",
+        "responses": { "200": { "description": "Failed records held by the in-memory processing store.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/EventProcessingRecord" } } } } } }
+      }
+    },
+    "/events/{eventId}/recovery": {
+      "post": {
+        "operationId": "RecoverFailedEvent",
+        "summary": "Clear a failed record so the original event can be resubmitted",
+        "parameters": [{ "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Failed state cleared; caller must resubmit the event.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecoveryResult" } } } },
+          "409": { "description": "Record is absent or not Failed. Uncertain outcomes cannot be reset." }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "Health",
+        "summary": "Check Function host health",
+        "responses": { "200": { "description": "Function host is healthy.", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "example": "healthy" } } } } } } }
+      }
+    },
+    "/HelloFunction": {
+      "get": {
+        "operationId": "HelloFunctionGet",
+        "summary": "Return the sample Functions welcome message",
+        "security": [{ "functionKey": [] }],
+        "responses": { "200": { "description": "Welcome text.", "content": { "text/plain": { "schema": { "type": "string", "example": "Welcome to Azure Functions!" } } } }, "401": { "description": "A Function key is required." } }
+      },
+      "post": {
+        "operationId": "HelloFunctionPost",
+        "summary": "Return the sample Functions welcome message",
+        "security": [{ "functionKey": [] }],
+        "responses": { "200": { "description": "Welcome text.", "content": { "text/plain": { "schema": { "type": "string", "example": "Welcome to Azure Functions!" } } } }, "401": { "description": "A Function key is required." } }
+      }
+    },
+    "/openapi.json": {
+      "get": { "operationId": "OpenApiDocument", "summary": "Download this OpenAPI document", "responses": { "200": { "description": "OpenAPI 3.0.3 document.", "content": { "application/json": { "schema": { "type": "object" } } } } } }
+    },
+    "/swagger": {
+      "get": { "operationId": "SwaggerUi", "summary": "Open the interactive Swagger UI", "responses": { "200": { "description": "Swagger UI HTML page.", "content": { "text/html": { "schema": { "type": "string" } } } } } }
+    },
+    "/swagger/{asset}": {
+      "get": {
+        "operationId": "SwaggerUiAsset",
+        "summary": "Load a bundled Swagger UI asset",
+        "parameters": [{ "name": "asset", "in": "path", "required": true, "schema": { "type": "string", "enum": ["swagger-ui-bundle.js", "swagger-ui-standalone-preset.js", "swagger-ui.css", "favicon-32x32.png"] } }],
+        "responses": { "200": { "description": "Bundled JavaScript, CSS, or favicon asset." }, "404": { "description": "Asset is not in the allowlist." } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "functionKey": { "type": "apiKey", "in": "header", "name": "x-functions-key", "description": "Required for the existing HelloFunction endpoint." } },
+    "schemas": {
+      "EmployeeUpdatedEvent": {
+        "type": "object",
+        "required": ["eventId", "eventType"],
+        "description": "Provide a timestamp or effectiveDate and the required employee data. A source sequenceNumber enables per-employee ordering; timestamps do not establish ordering.",
+        "properties": {
+          "eventId": { "type": "string", "example": "evt-1001" },
+          "eventType": { "type": "string", "example": "EmployeeUpdated" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "effectiveDate": { "type": "string", "format": "date-time" },
+          "sequenceNumber": { "type": "integer", "format": "int64", "nullable": true },
+          "data": { "$ref": "#/components/schemas/EmployeePayload" },
+          "employeeId": { "type": "string", "description": "Flat event form; nested data takes precedence when supplied." },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "department": { "type": "string" },
+          "jobTitle": { "type": "string", "nullable": true },
+          "officeCode": { "type": "string" },
+          "location": { "type": "string" }
+        }
+      },
+      "EmployeePayload": {
+        "type": "object",
+        "required": ["employeeId", "firstName", "lastName", "email", "department"],
+        "properties": {
+          "employeeId": { "type": "string" },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "department": { "type": "string" },
+          "jobTitle": { "type": "string", "nullable": true },
+          "officeCode": { "type": "string", "nullable": true },
+          "location": { "type": "string", "nullable": true }
+        }
+      },
+      "EventProcessingResult": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "integer", "description": "0 Success, 1 Duplicate, 2 Conflict, 3 Invalid, 4 Malformed, 5 Uncertain, 6 Failed, 7 Stale." },
+          "isSuccess": { "type": "boolean" },
+          "isDuplicate": { "type": "boolean" },
+          "isStale": { "type": "boolean" },
+          "eventId": { "type": "string", "nullable": true },
+          "transformedRequest": { "$ref": "#/components/schemas/Employee360UpdateRequest", "nullable": true },
+          "errors": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationError" } },
+          "message": { "type": "string", "nullable": true }
+        }
+      },
+      "Employee360UpdateRequest": {
+        "type": "object",
+        "properties": {
+          "employeeId": { "type": "string" }, "firstName": { "type": "string" }, "lastName": { "type": "string" },
+          "fullName": { "type": "string" }, "email": { "type": "string", "nullable": true },
+          "department": { "type": "string" }, "jobTitle": { "type": "string", "nullable": true },
+          "officeLocation": { "type": "string" }, "officeCode": { "type": "string", "nullable": true },
+          "updatedAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "ValidationError": { "type": "object", "properties": { "field": { "type": "string" }, "message": { "type": "string" } } },
+      "EventProcessingRecord": {
+        "type": "object",
+        "properties": {
+          "EventId": { "type": "string" }, "State": { "type": "integer", "description": "0 Received, 1 Completed, 2 Failed, 3 Uncertain, 4 Stale." },
+          "FirstSeenAtUtc": { "type": "string", "format": "date-time" }, "LastUpdatedAtUtc": { "type": "string", "format": "date-time" },
+          "AttemptCount": { "type": "integer" }, "Details": { "type": "string", "nullable": true },
+          "EmployeeId": { "type": "string", "nullable": true }, "SequenceNumber": { "type": "integer", "format": "int64", "nullable": true }
+        }
+      },
+      "RecoveryResult": { "type": "object", "properties": { "eventId": { "type": "string" }, "reset": { "type": "boolean" }, "message": { "type": "string" } } }
+    }
+  }
+}

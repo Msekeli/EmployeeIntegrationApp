@@ -112,36 +112,45 @@ Verification: `dotnet build EmployeeIntegration.slnx` succeeded with 0 warnings 
 
 ## Checkpoint 6 — End-to-End Verification
 
-**Status: Not started.**
+**Status: Complete — automated verification and local HTTP flows exercised.**
 
 Goal: Verify the complete integration locally.
 
-- [ ] Verify that a valid event is received, transformed, and sent to the mock API.
-- [ ] Verify that duplicate delivery does not produce unintended duplicate effects.
-- [ ] Verify that invalid or malformed input is rejected or isolated appropriately.
-- [ ] Verify supported location normalization.
-- [ ] Verify bounded handling of temporary downstream failures.
-- [ ] Verify permanent failures are distinguished from transient failures.
-- [ ] Verify stale-event handling when reliable ordering information is available.
-- [ ] Verify that processing status or failure details can be inspected.
-- [ ] Verify that a failure in one event does not prevent unrelated events from being processed.
-- [ ] Run the automated tests, build the solution, exercise the local HTTP flow, and review the final changes.
+- [x] Valid event submitted to the local Function, transformed, and accepted by the mock API; confirmed via repeated idempotency key returning `already_processed` from the mock.
+- [x] Duplicate delivery returned `Duplicate` without a second downstream update.
+- [x] Invalid and malformed HTTP payloads returned HTTP 400; a later independent valid event succeeded.
+- [x] `CPT` was transformed to `Cape Town` in the Function response and mock API's duplicate response.
+- [x] Bounded transient retries verified by automated `Employee360ClientTests`; not exercised through the local Function HTTP flow (see limitation below).
+- [x] Permanent downstream failure exercised through a temporary local 404 base path; processing recorded `Failed` and returned HTTP 500.
+- [x] Sequence 99 after sequence 100 for the same employee returned `Stale` and was not sent downstream.
+- [x] Event status, dead-letter listing, and recovery HTTP endpoints exercised; failed record was listed, reset, and then returned 404 to inspection.
+- [x] A separate request was processed after the permanent failure and received its own failure result, demonstrating request isolation.
+- [x] Automated build and test suite run; final diff check passed.
 
-Record actual results and remaining limitations.
+Verification results: .NET SDK 10.0.401 and Azure Functions Core Tools 4.7.0 were available. From the repository root, the mock API was started with `dotnet run --no-build --project Employee360.MockApi/Employee360.MockApi.csproj --launch-profile http`; Azurite was started with `azurite --silent --location /tmp/employee-integration-azurite --debug /tmp/employee-integration-azurite.log`; and from `EmployeeIntegration.Functions`, the Function host was started with `func start --port 7297`. The mock API ran on port 5223, Azurite satisfied `UseDevelopmentStorage=true`, and Functions ran on port 7297. `dotnet build EmployeeIntegration.slnx` passed with 0 warnings and 0 errors. `dotnet test EmployeeIntegration.slnx` passed 116 tests (116 passed, 0 failed, 0 skipped). `git diff --check` passed.
+
+Limitation: The Function's downstream client does not forward the mock API's `X-Mock-Fail-Times`/`X-Mock-Status` test headers, so transient 503/retry behavior was verified through automated client tests, not through the real Function-to-mock HTTP path. The permanent failure and successful recovery endpoint were exercised by temporarily pointing a separate local Function host at a non-existent mock route; `local.settings.json` was restored byte-for-byte afterward. Processing status remains in-memory and resets when the Function host restarts.
 
 ## Checkpoint 7 — Project Readiness
 
-**Status: Not started.**
+**Status: Complete — documentation and local OpenAPI/Swagger walkthrough verified.**
 
 Goal: Ensure the repository is understandable, runnable, and professionally presented.
 
-- [ ] Provide a README with verified prerequisites and local run instructions.
-- [ ] Document the actual configuration required to run the Function and mock API.
-- [ ] Ensure no credentials or secrets are committed.
-- [ ] Ensure documentation accurately reflects implemented functionality and known limitations.
-- [ ] Review project structure, naming, dependency direction, error handling, and testability.
-- [ ] Document a reasonable Azure evolution path without implementing unnecessary infrastructure.
-- [ ] Ensure the AI usage record accurately reflects meaningful assistance and verified outcomes.
+- [x] Provide a README with verified prerequisites and local run instructions.
+- [x] Document the actual configuration required to run the Function and mock API.
+- [x] Ensure no credentials or secrets are committed.
+- [x] Ensure documentation accurately reflects implemented functionality and known limitations.
+- [x] Review project structure, naming, dependency direction, error handling, and testability.
+- [x] Document a reasonable Azure evolution path without implementing unnecessary infrastructure.
+- [x] Ensure the AI usage record accurately reflects meaningful assistance and verified outcomes.
+- [x] Serve the OpenAPI document and local Swagger UI for the existing HTTP endpoints.
+
+Verification: With Azurite, Employee360.MockApi, and the Functions host running simultaneously, the mock API listened on port 5223 and Functions on port 7297. The live Checkpoint 7 HTTP run submitted a valid event and received HTTP 200/Success with `officeLocation: Cape Town`; inspecting it returned HTTP 200 with state Completed and sequence 100. Resubmitting the same ID returned HTTP 200/Duplicate. Malformed JSON and a structurally invalid event each returned HTTP 400, and an independent valid event then returned HTTP 200/Success. Sequence 99 for the same employee after sequence 100 returned HTTP 200/Stale. Repeating the downstream PUT directly with the same idempotency key returned `already_processed`, `isDuplicate: true`, and the expected employee payload. The empty dead-letter endpoint returned HTTP 200 with `[]`. The earlier Checkpoint 6 live failure drill also exercised a permanent local 404, failed-event inspection/listing, recovery reset, and independent request handling; its result and settings restoration are recorded above. The Function host exposed `/api/openapi.json` (HTTP 200, valid OpenAPI 3.0.3 JSON listing the actual Function routes) and `/api/swagger` (HTTP 200); the bundle, standalone preset, and CSS each returned HTTP 200. Browser UI rendering/interaction was not visually confirmed: the browser automation runtime could not start, although the page and its resources were fetched successfully and a Codex browser panel was queued. The live Function client does not expose the mock's transient-failure controls, so transient retry behavior remains verified by automated client tests only.
+
+Final verification from the confirmed repository directory: `dotnet build EmployeeIntegration.slnx` succeeded with 0 warnings and 0 errors; `dotnet test EmployeeIntegration.slnx` passed 116 tests (116 passed, 0 failed, 0 skipped); `git diff --check` passed.
+
+The OpenAPI document is maintained as an embedded JSON resource and can drift from code if routes/contracts change. The processing store remains in-memory, and Checkpoint 7 does not add durable storage, authentication, deployment, or production API governance.
 
 ## Azure Evolution
 

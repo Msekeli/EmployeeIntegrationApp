@@ -30,6 +30,10 @@ Dependencies should point inward toward the core business rules.
 
 This flow describes the intended processing design. The implementation status of each capability must be verified against the code and tests. Planned functionality must not be presented as completed.
 
+## Local API Documentation
+
+The Functions project serves a hand-maintained OpenAPI 3.0.3 document at `/api/openapi.json` and Swagger UI at `/api/swagger`. The document is embedded in the Functions assembly, and the Swagger UI JavaScript and CSS are served from embedded package assets so local use does not depend on a CDN. Keep the document aligned with the actual HTTP routes and request/response contracts when those change. These routes support local development and do not add authentication or production API governance.
+
 ## Reliability and Data Handling
 
 - Use stable event identifiers for duplicate detection.
