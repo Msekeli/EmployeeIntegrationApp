@@ -29,7 +29,7 @@ public sealed class EmployeeUpdatedFunction
         using var reader = new StreamReader(request.Body);
         var body = await reader.ReadToEndAsync();
 
-        var result = _processor.ProcessJson(body);
+        var result = await _processor.ProcessJsonAsync(body);
 
         var statusCode = result.Status switch
         {

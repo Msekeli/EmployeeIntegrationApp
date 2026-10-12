@@ -22,6 +22,7 @@
     <ProjectReference Include="..\EmployeeIntegration.Application\EmployeeIntegration.Application.csproj" />
     <ProjectReference Include="..\EmployeeIntegration.Domain\EmployeeIntegration.Domain.csproj" />
     <ProjectReference Include="..\EmployeeIntegration.Infrastructure\EmployeeIntegration.Infrastructure.csproj" />
+    <ProjectReference Include="..\Employee360.MockApi\Employee360.MockApi.csproj" />
   </ItemGroup>
 
 </Project>

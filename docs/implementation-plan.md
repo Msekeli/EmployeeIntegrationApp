@@ -79,17 +79,17 @@ Use the simplest persistence mechanism that satisfies the requirement and fits t
 
 ## Checkpoint 4 — Downstream HTTP Reliability
 
-**Status: Not started.**
+**Status: Complete — implemented, built, tested, and reviewed.**
 
 Goal: Call the mock Employee 360 API and handle downstream responses safely.
 
-- [ ] Configure the downstream HTTP client through the existing architecture.
-- [ ] Set appropriate timeouts.
-- [ ] Implement bounded retries for eligible transient failures.
-- [ ] Distinguish transient failures from permanent failures.
-- [ ] Ensure validation failures are not retried as transient downstream errors.
-- [ ] Extend the mock API only as needed to simulate successful responses and selected failures.
-- [ ] Add tests for successful calls, retry limits, and permanent-failure handling.
+- [x] Configure the downstream HTTP client through the existing architecture.
+- [x] Set appropriate timeouts.
+- [x] Implement bounded retries for eligible transient failures.
+- [x] Distinguish transient failures from permanent failures.
+- [x] Ensure validation failures are not retried as transient downstream errors.
+- [x] Extend the mock API only as needed to simulate successful responses and selected failures.
+- [x] Add tests for successful calls, retry limits, and permanent-failure handling.
 
 Retries must account for ambiguous outcomes. A timeout does not prove that the downstream service failed to apply an update. Prevent duplicate effects through idempotency or another justified mechanism.
 

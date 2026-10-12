@@ -74,14 +74,19 @@ Add entries as meaningful implementation milestones are completed.
   - `dotnet test EmployeeIntegration.slnx` passed (97 total tests: 97 passed, 0 failed, 0 skipped).
 - **Remaining limitation:** Processing records remain in memory and are lost on application or process restart, so restart-safe deduplication is not provided.
 
-### Milestone: Checkpoint 3 Correctness Review
+### Milestone: Checkpoint 4 — Downstream HTTP Reliability
 
-- **Task:** Reviewed concurrent claiming, duplicate delivery, uncertain and failed outcomes, reset behaviour, EventId comparison, state transitions, and focused tests.
+- **Task:** Implemented downstream REST client integration for Employee 360 with bounded retries, explicit timeouts, transparent transient/permanent error handling, idempotency key forwarding, and mock API contract alignment.
 - **Engineering decisions:**
-  - Kept the atomic `ConcurrentDictionary.TryAdd` claim path and added ordinal EventId comparison so opaque identifiers are not merged by case.
-  - Prevented `TryReset` from removing `Received`, `Completed`, or `Uncertain` records. Only a terminal `Failed` record can be explicitly reset for replay; an uncertain outcome remains blocked because the downstream side effect may already have succeeded.
-  - Rejected invalid transitions out of terminal states and added regression coverage for the lifecycle rules.
+  - Designed `IEmployee360Client` and `DownstreamResult` in `EmployeeIntegration.Application`, keeping all HTTP and retry logic encapsulated in `EmployeeIntegration.Infrastructure/Employee360Client.cs`.
+  - Avoided third-party retry libraries (no Polly dependency), implementing bounded retries directly in pure C#/.NET 10.
+  - Handled timeouts and network dropouts honestly as `DownstreamStatus.Uncertain` and recorded state as `ProcessingState.Uncertain` without falsely claiming completion or assuming the update was unapplied.
+  - Treated HTTP 429 and 5xx (500, 502, 503, 504) as eligible transient failures with bounded retry and backoff (respecting `Retry-After` on 429), while treating 4xx client errors (400, 404) as permanent failures without retry.
+  - Forwarded `Idempotency-Key: {eventId}` on downstream requests; extended `Employee360.MockApi/Controllers/EmployeesController.cs` to track keys and avoid re-applying updates on duplicate deliveries.
+  - Aligned `EmployeesController` request contract with `Employee360UpdateRequest` and added simulation capabilities (`X-Mock-Status`, `X-Mock-Fail-Times`) for automated testing.
+  - Configured downstream client base URL, timeout, and max retries via `Employee360ClientOptions` in `local.settings.json` and registered typed client with `AddHttpClient` in Functions DI.
 - **Verification:**
   - `dotnet build EmployeeIntegration.slnx` passed with 0 Warnings and 0 Errors.
-  - `dotnet test EmployeeIntegration.slnx` passed (92 total tests: 92 passed, 0 failed, 0 skipped).
-- **Remaining limitation:** Processing records remain in memory and are lost on application or process restart, so restart-safe deduplication is not provided.
+  - `dotnet test EmployeeIntegration.slnx` passed (112 total tests: 112 passed, 0 failed, 0 skipped).
+  - Verified successful delivery, bounded retries on 503 and 429, permanent failure on 400 and 404 without retries, timeout honest uncertainty handling, downstream idempotency key forwarding, and mock API idempotency deduplication.
+- **Remaining limitation:** In-memory tracking in both the integration app and mock API is volatile and will reset on application restart. Event ordering (e.g. sequence numbers) and dead-letter/replay handling are deferred to Checkpoint 5.

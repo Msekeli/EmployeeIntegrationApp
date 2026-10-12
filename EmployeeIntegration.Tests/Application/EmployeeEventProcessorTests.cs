@@ -377,6 +377,97 @@ public class EmployeeEventProcessorTests
         Assert.Equal(ProcessingState.Uncertain, _store.Get(eventId)?.State);
     }
 
+    [Fact]
+    public async Task ProcessAsync_WhenDownstreamSucceeds_MarksEventCompleted()
+    {
+        var store = new InMemoryEventProcessingStore();
+        var mockClient = new StubEmployee360Client(DownstreamResult.Succeeded(200));
+        var processor = new EmployeeEventProcessor(store, mockClient);
+
+        var eventId = "evt-downstream-ok";
+        var @event = CreateValidSampleEvent(eventId, "EMP-401");
+
+        var result = await processor.ProcessAsync(@event);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(EventProcessingStatus.Success, result.Status);
+        Assert.Equal(ProcessingState.Completed, store.Get(eventId)?.State);
+        Assert.Equal(eventId, mockClient.LastIdempotencyKey);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenDownstreamFailsPermanently_MarksEventFailed()
+    {
+        var store = new InMemoryEventProcessingStore();
+        var mockClient = new StubEmployee360Client(DownstreamResult.Permanent(400, "Invalid schema"));
+        var processor = new EmployeeEventProcessor(store, mockClient);
+
+        var eventId = "evt-downstream-perm-fail";
+        var @event = CreateValidSampleEvent(eventId, "EMP-402");
+
+        var result = await processor.ProcessAsync(@event);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(EventProcessingStatus.Failed, result.Status);
+        Assert.Equal(ProcessingState.Failed, store.Get(eventId)?.State);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenDownstreamTimesOut_MarksEventUncertain()
+    {
+        var store = new InMemoryEventProcessingStore();
+        var mockClient = new StubEmployee360Client(DownstreamResult.Uncertain("Timeout occurred"));
+        var processor = new EmployeeEventProcessor(store, mockClient);
+
+        var eventId = "evt-downstream-timeout";
+        var @event = CreateValidSampleEvent(eventId, "EMP-403");
+
+        var result = await processor.ProcessAsync(@event);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(EventProcessingStatus.Uncertain, result.Status);
+        Assert.Equal(ProcessingState.Uncertain, store.Get(eventId)?.State);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenDownstreamTransientRetriesExhausted_MarksEventFailed()
+    {
+        var store = new InMemoryEventProcessingStore();
+        var mockClient = new StubEmployee360Client(DownstreamResult.Transient(503, "503 retries exhausted"));
+        var processor = new EmployeeEventProcessor(store, mockClient);
+
+        var eventId = "evt-downstream-exhausted";
+        var @event = CreateValidSampleEvent(eventId, "EMP-404");
+
+        var result = await processor.ProcessAsync(@event);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(EventProcessingStatus.Failed, result.Status);
+        Assert.Equal(ProcessingState.Failed, store.Get(eventId)?.State);
+    }
+
+    private sealed class StubEmployee360Client : IEmployee360Client
+    {
+        private readonly DownstreamResult _result;
+
+        public StubEmployee360Client(DownstreamResult result)
+        {
+            _result = result;
+        }
+
+        public string? LastIdempotencyKey { get; private set; }
+
+        public Task<DownstreamResult> UpdateEmployeeAsync(
+            string employeeId,
+            Employee360UpdateRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            LastIdempotencyKey = idempotencyKey;
+            return Task.FromResult(_result);
+        }
+    }
+
     private static EmployeeUpdatedEvent CreateValidSampleEvent(string eventId, string employeeId)
     {
         return new EmployeeUpdatedEvent
