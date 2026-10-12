@@ -1,10 +1,12 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 using EmployeeIntegration.Domain;
 
 namespace EmployeeIntegration.Application;
 
 public sealed class EmployeeEventProcessor : IEmployeeEventProcessor
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> EmployeeGates = new(StringComparer.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -68,7 +70,12 @@ public sealed class EmployeeEventProcessor : IEmployeeEventProcessor
         }
 
         var eventId = @event!.EventId!;
-        var claim = _store.TryClaim(eventId);
+        var payload = @event.GetEffectivePayload();
+        var employeeGate = EmployeeGates.GetOrAdd(payload.EmployeeId ?? string.Empty, _ => new SemaphoreSlim(1, 1));
+        await employeeGate.WaitAsync(cancellationToken);
+        try
+        {
+        var claim = _store.TryClaim(eventId, payload.EmployeeId ?? string.Empty, @event.SequenceNumber);
 
         switch (claim.Status)
         {
@@ -87,6 +94,9 @@ public sealed class EmployeeEventProcessor : IEmployeeEventProcessor
                 return EventProcessingResult.Failed(
                     eventId,
                     $"Event '{eventId}' previously failed processing: {claim.ExistingRecord?.Details ?? "unspecified error"}.");
+
+            case ClaimStatus.Stale:
+                return EventProcessingResult.Stale(eventId, claim.ExistingRecord?.Details ?? "Event sequence is stale.");
 
             case ClaimStatus.Granted:
                 break;
@@ -139,6 +149,11 @@ public sealed class EmployeeEventProcessor : IEmployeeEventProcessor
             default:
                 _store.RecordState(eventId, ProcessingState.Failed, $"Downstream transient retries exhausted (HTTP {downstreamResult.StatusCode}): {downstreamResult.Message}");
                 return EventProcessingResult.Failed(eventId, $"Downstream transient retries exhausted (HTTP {downstreamResult.StatusCode}): {downstreamResult.Message}");
+        }
+        }
+        finally
+        {
+            employeeGate.Release();
         }
     }
 }

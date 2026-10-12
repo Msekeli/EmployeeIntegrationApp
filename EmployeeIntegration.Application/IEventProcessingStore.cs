@@ -11,11 +11,13 @@ public interface IEventProcessingStore
     /// If the event already exists, returns the corresponding claim status without duplicate grant.
     /// </summary>
     ProcessingClaimResult TryClaim(string eventId);
+    ProcessingClaimResult TryClaim(string eventId, string employeeId, long? sequenceNumber);
 
     /// <summary>
     /// Retrieves the current processing record for an event ID, or null if not found.
     /// </summary>
     EventProcessingRecord? Get(string eventId);
+    IReadOnlyList<EventProcessingRecord> GetAll();
 
     /// <summary>
     /// Records or updates the state and diagnostic details for an event.

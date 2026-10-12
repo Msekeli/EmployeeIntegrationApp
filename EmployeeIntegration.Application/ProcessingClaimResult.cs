@@ -25,7 +25,8 @@ public enum ClaimStatus
     /// <summary>
     /// An earlier attempt permanently failed.
     /// </summary>
-    Failed
+    Failed,
+    Stale
 }
 
 /// <summary>
@@ -52,4 +53,7 @@ public sealed record ProcessingClaimResult
 
     public static ProcessingClaimResult Failed(EventProcessingRecord record) =>
         new() { Status = ClaimStatus.Failed, ExistingRecord = record };
+
+    public static ProcessingClaimResult Stale(EventProcessingRecord record) =>
+        new() { Status = ClaimStatus.Stale, ExistingRecord = record };
 }

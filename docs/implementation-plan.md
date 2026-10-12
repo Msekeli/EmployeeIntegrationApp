@@ -95,17 +95,20 @@ Retries must account for ambiguous outcomes. A timeout does not prove that the d
 
 ## Checkpoint 5 — Event Ordering and Failure Recovery
 
-**Status: Not started.**
+**Status: Complete — implemented, built, tested, and reviewed.**
 
 Goal: Handle outdated events and isolate failures without stopping unrelated processing.
 
-- [ ] Use a trustworthy source version or sequence number when one exists.
-- [ ] Do not assume timestamps alone reliably establish event order.
-- [ ] Document limitations when the source does not provide sufficient ordering information.
-- [ ] Store sufficient failure context for investigation.
-- [ ] Expose relevant event status or failure information through an appropriate inspection endpoint.
-- [ ] Provide safe replay or recovery behaviour where justified.
-- [ ] Ensure a malformed or permanently failing event does not prevent independent valid events from being processed.
+- [x] Use the optional source `sequenceNumber` per employee; equal or lower sequences are recorded as stale and suppressed.
+- [x] Do not assume timestamps alone reliably establish event order; events without sequence information use existing idempotency handling.
+- [x] Store employee/version and failure details in processing records.
+- [x] Expose event status and failed events for inspection.
+- [x] Permit resetting failed events for replay by resubmitting the original event; uncertain outcomes remain blocked.
+- [x] Keep event handling isolated per HTTP request so malformed or permanently failing events do not stop independent requests.
+
+Inspection endpoints: `GET /api/events/{eventId}` and `GET /api/events/dead-letter`. Failed-event recovery is `POST /api/events/{eventId}/recovery`; it clears only a failed record, after which the caller must resubmit the original event with the same event ID. The in-memory store is volatile, and these capabilities are process-local rather than durable dead-letter storage.
+
+Verification: `dotnet build EmployeeIntegration.slnx` succeeded with 0 warnings and 0 errors; `dotnet test EmployeeIntegration.slnx` passed 116 tests (0 failed, 0 skipped); `git diff --check` passed.
 
 ## Checkpoint 6 — End-to-End Verification
 

@@ -38,6 +38,7 @@ public sealed class EmployeeUpdatedFunction
             EventProcessingStatus.Conflict => HttpStatusCode.Conflict,
             EventProcessingStatus.Uncertain => HttpStatusCode.InternalServerError,
             EventProcessingStatus.Failed => HttpStatusCode.InternalServerError,
+            EventProcessingStatus.Stale => HttpStatusCode.OK,
             _ => HttpStatusCode.BadRequest
         };
 

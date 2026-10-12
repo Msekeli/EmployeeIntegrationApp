@@ -24,5 +24,6 @@ public enum ProcessingState
     /// The outcome of the event processing is ambiguous or uncertain
     /// (e.g. downstream timeout or error where success/failure cannot be proven).
     /// </summary>
-    Uncertain
+    Uncertain,
+    Stale
 }

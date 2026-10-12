@@ -37,6 +37,13 @@ If verification has not been performed, state that explicitly. If a check fails,
 
 ## Development Milestone Record
 
+### Milestone: Checkpoint 5 — Event Ordering and Recovery
+
+- **Task:** Added per-employee `sequenceNumber` ordering to event claims, stale-event outcomes, event inspection, failed-event listing, and explicit failed-state recovery for caller-driven replay.
+- **Engineering decisions:** Sequence numbers are compared when ordering information and employee identity are present. Equal or lower numbers are stale; timestamps are not used. Failed events may be reset and resubmitted; uncertain outcomes remain blocked because the downstream side effect may have occurred. No queue or external persistence was added.
+- **Verification:** `dotnet build EmployeeIntegration.slnx` passed with 0 warnings and 0 errors. `dotnet test EmployeeIntegration.slnx` passed (116 total: 116 passed, 0 failed, 0 skipped). `git diff --check` passed.
+- **Limitations:** State and dead-letter inspection are in-memory and volatile. Replay requires the caller to resubmit the original payload.
+
 Add entries as meaningful implementation milestones are completed.
 
 ### Milestone: Checkpoint 3 — Idempotency and Persistence

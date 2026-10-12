@@ -446,6 +446,37 @@ public class EmployeeEventProcessorTests
         Assert.Equal(ProcessingState.Failed, store.Get(eventId)?.State);
     }
 
+    [Fact]
+    public async Task ProcessAsync_OutOfOrderSequence_SuppressesStaleEventBeforeDownstreamCall()
+    {
+        var store = new InMemoryEventProcessingStore();
+        var client = new CountingClient();
+        var processor = new EmployeeEventProcessor(store, client);
+
+        var newest = CreateValidSampleEvent("evt-seq-10", "EMP-SEQ") with { SequenceNumber = 10 };
+        var stale = CreateValidSampleEvent("evt-seq-9", "EMP-SEQ") with { SequenceNumber = 9 };
+
+        Assert.Equal(EventProcessingStatus.Success, (await processor.ProcessAsync(newest)).Status);
+        var result = await processor.ProcessAsync(stale);
+
+        Assert.Equal(EventProcessingStatus.Stale, result.Status);
+        Assert.Equal(1, client.CallCount);
+        Assert.Equal(ProcessingState.Stale, store.Get("evt-seq-9")?.State);
+        Assert.Contains("sequence 9", store.Get("evt-seq-9")?.Details);
+    }
+
+    private sealed class CountingClient : IEmployee360Client
+    {
+        public int CallCount { get; private set; }
+
+        public Task<DownstreamResult> UpdateEmployeeAsync(string employeeId, Employee360UpdateRequest request,
+            string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(DownstreamResult.Succeeded(200));
+        }
+    }
+
     private sealed class StubEmployee360Client : IEmployee360Client
     {
         private readonly DownstreamResult _result;

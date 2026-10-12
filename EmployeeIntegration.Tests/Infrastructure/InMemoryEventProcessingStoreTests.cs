@@ -67,6 +67,39 @@ public class InMemoryEventProcessingStoreTests
     }
 
     [Fact]
+    public void TryClaim_SequenceNumbers_AcceptsHigherAndRecordsLowerAsStale()
+    {
+        Assert.Equal(ClaimStatus.Granted, _store.TryClaim("evt-v5", "EMP-V", 5).Status);
+        var stale = _store.TryClaim("evt-v4", "EMP-V", 4);
+
+        Assert.Equal(ClaimStatus.Stale, stale.Status);
+        Assert.Equal(ProcessingState.Stale, _store.Get("evt-v4")?.State);
+        Assert.Equal(ClaimStatus.InProgress, _store.TryClaim("evt-v5", "EMP-V", 5).Status);
+    }
+
+    [Fact]
+    public void GetAll_AndReset_ExposeFailedRecoveryRecords()
+    {
+        _store.RecordState("evt-dead", ProcessingState.Failed, "Permanent downstream failure.");
+
+        var record = Assert.Single(_store.GetAll());
+        Assert.Equal("evt-dead", record.EventId);
+        Assert.Equal("Permanent downstream failure.", record.Details);
+        Assert.True(_store.TryReset("evt-dead"));
+        Assert.Empty(_store.GetAll());
+    }
+
+    [Fact]
+    public void TryReset_FailedVersion_AllowsSameVersionReplay()
+    {
+        _store.TryClaim("evt-replay-version", "EMP-R", 12);
+        _store.RecordState("evt-replay-version", ProcessingState.Failed, "Retry after correction.");
+
+        Assert.True(_store.TryReset("evt-replay-version"));
+        Assert.Equal(ClaimStatus.Granted, _store.TryClaim("evt-replay-version", "EMP-R", 12).Status);
+    }
+
+    [Fact]
     public void TryClaim_EventIdsAreComparedOrdinally()
     {
         _store.RecordState("evt-case-sensitive", ProcessingState.Completed);

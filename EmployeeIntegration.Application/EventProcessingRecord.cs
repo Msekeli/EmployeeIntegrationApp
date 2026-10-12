@@ -11,4 +11,6 @@ public sealed record EventProcessingRecord
     public DateTimeOffset LastUpdatedAtUtc { get; init; }
     public int AttemptCount { get; init; } = 1;
     public string? Details { get; init; }
+    public string? EmployeeId { get; init; }
+    public long? SequenceNumber { get; init; }
 }

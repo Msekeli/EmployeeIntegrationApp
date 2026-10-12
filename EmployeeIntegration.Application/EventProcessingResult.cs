@@ -10,7 +10,8 @@ public enum EventProcessingStatus
     Invalid,
     Malformed,
     Uncertain,
-    Failed
+    Failed,
+    Stale
 }
 
 public sealed record EventProcessingResult
@@ -18,6 +19,7 @@ public sealed record EventProcessingResult
     public EventProcessingStatus Status { get; init; }
     public bool IsSuccess => Status == EventProcessingStatus.Success;
     public bool IsDuplicate => Status == EventProcessingStatus.Duplicate;
+    public bool IsStale => Status == EventProcessingStatus.Stale;
     public string? EventId { get; init; }
     public Employee360UpdateRequest? TransformedRequest { get; init; }
     public IReadOnlyList<ValidationError> Errors { get; init; } = Array.Empty<ValidationError>();
@@ -63,6 +65,9 @@ public sealed record EventProcessingResult
             EventId = eventId,
             Message = message
         };
+
+    public static EventProcessingResult Stale(string eventId, string message) =>
+        new() { Status = EventProcessingStatus.Stale, EventId = eventId, Message = message };
 
     public static EventProcessingResult Invalid(IReadOnlyList<ValidationError> errors, string? eventId = null) =>
         new()
