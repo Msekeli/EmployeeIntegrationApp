@@ -31,7 +31,7 @@ A failed check must be reported and investigated. Do not proceed as though verif
 
 ## Checkpoint 1 — Foundation
 
-**Status: Not started.**
+**Status: Complete — implemented, built, tested, and reviewed.**
 
 Goal: Establish a buildable solution and working local development environment.
 
@@ -51,8 +51,7 @@ Git initialisation and connection to the new GitHub repository will occur after 
 
 ## Checkpoint 2 — Event Validation and Transformation
 
-**Status: Not started.**
-
+**Status: Complete — implemented, built, tested, and reviewed.**
 Goal: Receive an employee update event, validate it, normalize supported values, and map it into the downstream Employee 360 contract.
 
 - [ ] Define the source event and downstream request models.
