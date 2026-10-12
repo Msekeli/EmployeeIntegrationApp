@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/EmployeeIntegration.Functions/">
+    <Project Path="EmployeeIntegration.Functions/EmployeeIntegration_Functions.csproj" />
+  </Folder>
+  <Project Path="Employee360.MockApi/Employee360.MockApi.csproj" />
+  <Project Path="EmployeeIntegration.Application/EmployeeIntegration.Application.csproj" />
+  <Project Path="EmployeeIntegration.Domain/EmployeeIntegration.Domain.csproj" />
+  <Project Path="EmployeeIntegration.Infrastructure/EmployeeIntegration.Infrastructure.csproj" />
+  <Project Path="EmployeeIntegration.Tests/EmployeeIntegration.Tests.csproj" />
+</Solution>
